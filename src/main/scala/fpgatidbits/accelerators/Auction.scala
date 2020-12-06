@@ -26,6 +26,7 @@ class Auction(p: PlatformWrapperParams, ap: AuctionParams) extends GenericAccele
     val baseAddr = Input(UInt(64.W))
     val nRows = Input(UInt(32.W))
     val nCols = Input(UInt(32.W))
+    val byteCount = Input(UInt(32.W))
     val sum = Output(UInt(32.W))
     val cycleCount = Output(UInt(32.W))
   })
@@ -79,18 +80,18 @@ class DataDistributor(ap: AuctionParams) extends MultiIOModule {
   val regCount = RegInit(0.U)
 
   // Initialize the output to 0s
-  peOut.map({
-    _.ready := false.B
-    _.bits := 0.U
+  peOut.map({ (out: DecoupledIO[UInt]) =>
+    out.valid := false.B
+    out.bits := 0.U
   })
 
   // Connect the memory stream to the right PE
   mem <> peOut(regCount)
 
-  when (mem.fire) {
-    when (regCount === (ap.nProcessingElements - 1.U) {
+  when (mem.fire === true.B) {
+    when (regCount === (ap.nProcessingElements-1).U ) {
       regCount := 0.U
-    } else {
+    }.otherwise {
       regCount := regCount + 1.U
     }
   }
@@ -104,16 +105,23 @@ class ProessingElementIO(ap: AuctionParams) extends Bundle {
 }
 
 class ProcessingElement(ap: AuctionParams) extends MultiIOModule {
-  val io = IO(new ProessingElementIO(ap.datSz))
+  val io = IO(new ProessingElementIO(ap))
 
   val sIdle :: sProcess :: sFinished :: Nil = Enum(3)
   val regState = RegInit(sIdle)
 
-  val regReward = RegInit(0.U(ap.datSz.w))
-  val regPrice = RegInit(0.U(ap.datSz.w))
-  val regBenefit = RegInit(0.U(ap.datSz.w))
+  val regReward = RegInit(0.U(ap.datSz.W))
+  val regPrice = RegInit(0.U(ap.datSz.W))
+  val regBenefit = RegInit(0.U(ap.datSz.W))
 
-  switch (regStage) {
+  // Drive signals to default
+  io.rewardIn.ready := false.B
+  io.benefitOut.valid := false.B
+  io.benefitOut.bits := 0.U
+  io.priceIn.ready := false.B
+
+
+  switch (regState) {
     is (sIdle) {
       // Idle state. We wait for valid input on both rewardIn and priceIn
       when(io.rewardIn.valid && io.priceIn.valid) {
@@ -121,7 +129,7 @@ class ProcessingElement(ap: AuctionParams) extends MultiIOModule {
         io.priceIn.ready := true.B
         regReward := io.rewardIn.bits
         regPrice := io.priceIn.bits
-        regstate := sProcess
+        regState := sProcess
       }
 
     }
@@ -143,7 +151,7 @@ class ProcessingElement(ap: AuctionParams) extends MultiIOModule {
 
 // The serach tasks takes in one net benefit at the time and calculates the
 // total highest, its index and its bid which is passed along to next node
-class SearchTaskResult(ap: AuctionParams) extends Bundle {
+class SearchTaskResult(private val ap: AuctionParams) extends Bundle {
   val winner = UInt(log2Ceil(ap.nProcessingElements).W)
   val bid = UInt(ap.datSz.W)
 }
@@ -151,22 +159,33 @@ class SearchTaskResult(ap: AuctionParams) extends Bundle {
 class SearchTaskIO(ap: AuctionParams) extends Bundle {
   val benefitIn = Flipped(Decoupled(UInt(ap.datSz.W)))
   val resultOut = Decoupled(new SearchTaskResult(ap))
+
+  def driveDefaults(): Unit = {
+    benefitIn.ready := false.B
+    resultOut.valid := false.B
+    resultOut.bits.winner := 0.U
+    resultOut.bits.bid := 0.U
+  }
 }
 
 class SearchTask(ap: AuctionParams) extends MultiIOModule {
-  val io = IO(new SearchTaskIO)
+  val io = IO(new SearchTaskIO(ap))
   val regCurrentBest = RegInit(0.U)
   val regCurrentNextBest = RegInit(0.U)
   val regCount = RegInit(0.U)
   val regCurrentBestIdx = RegInit(0.U)
 
-  val sProcess :: sFinished :: Nil = Enum(3)
+  val sProcess :: sFinished :: Nil = Enum(2)
   val regState = RegInit(sProcess)
+
+  // Drive interface signals to default
+  io.driveDefaults
+
 
   switch (regState) {
 
     is (sProcess) {
-      io.benefitIn.ready = true.B
+      io.benefitIn.ready := true.B
       io.resultOut.valid := false.B
       io.resultOut.bits := DontCare
       when (io.benefitIn.fire) {
@@ -175,7 +194,7 @@ class SearchTask(ap: AuctionParams) extends MultiIOModule {
           regCurrentNextBest := regCurrentBest
           regCurrentBestIdx := regCount
         }
-        .else
+        .otherwise
         {
           when(io.benefitIn.bits > regCurrentNextBest) {
             regCurrentNextBest := io.benefitIn.bits
@@ -183,10 +202,10 @@ class SearchTask(ap: AuctionParams) extends MultiIOModule {
         }
 
         // Increment count
-        when(regCount === (ap.nProcessingElements - 1.U)) {
+        when(regCount === (ap.nProcessingElements - 1).U) {
           regCount := 0.U
           regState := sFinished
-        }. else {
+        }. otherwise {
           regCount := regCount + 1.U
         }
       }
@@ -218,10 +237,12 @@ class StreamReaderControlSignals extends Bundle {
   val error = Output(Bool())
   val baseAddr = Input(UInt(64.W)) // TODO: Make generic
   val byteCount = Input(UInt(32.W))
+
+
 }
 
 class AuctionControllerIO(ap: AuctionParams) extends Bundle {
-  val searchResultIn = Flipped(Decoupled(new SearchTaskResult()))
+  val searchResultIn = Flipped(Decoupled(new SearchTaskResult(ap)))
   val streamReaderCtrlSignals = Flipped(new StreamReaderControlSignals)
   val pricesOut = Vec(ap.nProcessingElements, Decoupled(UInt(ap.datSz.W)))
   val start = Input(Bool())
@@ -229,25 +250,45 @@ class AuctionControllerIO(ap: AuctionParams) extends Bundle {
   val baseAddress = Input(UInt(64.W))
   val nRows = Input(UInt(32.W))
   val nCols = Input(UInt(32.W))
+
+
+  def driveDefaults() = {
+    finished := false.B
+    pricesOut.map({case (out) =>
+      out.valid := false.B
+      out.bits := 0.U
+    })
+    searchResultIn.ready := false.B
+    streamReaderCtrlSignals.start := false.B
+    streamReaderCtrlSignals.byteCount := 0.U
+    streamReaderCtrlSignals.baseAddr := 0.U
+  }
 }
 
 
-class AuctionController(ap: AuctionParams) extends MultiiOModule {
+class AuctionController(ap: AuctionParams) extends MultiIOModule {
   val io = IO(new AuctionControllerIO(ap))
+  io.driveDefaults
 
   val regAssignments = RegInit(VecInit(Seq.fill(ap.nProcessingElements){ap.nProcessingElements.U}))
-  val qUnassigned = Module(new Queue(UInt(), ap.nProcessingElements))
+  val qUnassigned = Module(new Queue(UInt(), ap.nProcessingElements)).io
+  qUnassigned.deq.ready := false.B
+  qUnassigned.enq.valid := false.B
+  qUnassigned.enq.bits := 0.U
+
   val regCurrentAgent= RegInit(0.U)
 
   val regPrices = RegInit(VecInit(Seq.fill(ap.nProcessingElements){0.U(ap.datSz.W)}))
   // Connect prices to the PEs
   (io.pricesOut zip regPrices).map({
-    (io, reg) =>
+    case (io, reg) =>
       io.valid := true.B
       io.bits := reg
   })
 
-  val sSetup :: sIdle :: sReading :: sFinished :: Nil = Enum(3)
+
+
+  val sSetup :: sIdle :: sReading :: sFinished :: Nil = Enum(4)
   val regState = RegInit(sSetup)
 
   val cnt = RegInit(0.U)
@@ -257,10 +298,10 @@ class AuctionController(ap: AuctionParams) extends MultiiOModule {
       // Setup the unassigned queue
       qUnassigned.enq.valid := true.B
       qUnassigned.enq.bits := cnt
-      when (cnt === ap.nProcessingElements - 1.U) {
+      when (cnt === (ap.nProcessingElements - 1).U) {
         cnt := 0.U
         regState := sIdle
-      } else {
+      }.otherwise {
         cnt := cnt + 1.U
       }
 
@@ -268,12 +309,12 @@ class AuctionController(ap: AuctionParams) extends MultiiOModule {
     is (sIdle) {
       when (io.start) {
         // Dequeue an element
-        when (qUnassigned.deq.ready) {
+        when (qUnassigned.deq.valid) {
           val unassigned = WireInit(qUnassigned.deq.bits)
           regCurrentAgent := unassigned
 
-          qUnassigned.deq.valid := true.B
-          assert(qUnassigned.deq.ready)
+          qUnassigned.deq.ready := true.B
+          assert(qUnassigned.deq.valid)
 
           // Start the streamReader
           io.streamReaderCtrlSignals.start := true.B
@@ -281,7 +322,7 @@ class AuctionController(ap: AuctionParams) extends MultiiOModule {
           io.streamReaderCtrlSignals.byteCount := io.nCols
 
           regState := sReading
-        }. else {
+        }.otherwise {
           // We have no unassigned agents. => We are finished
           io.finished := true.B
           regState := sSetup
