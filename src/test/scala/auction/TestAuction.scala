@@ -7,39 +7,75 @@ import chisel3._
 import fpgatidbits.Accelerators._
 
 
-class TestAuction extends FlatSpec with ChiselScalatestTester with Matchers {
+class TestDataDistributor extends FlatSpec with ChiselScalatestTester with Matchers {
 
   object AuctionTestParams extends AuctionParams {
     val nProcessingElements = 4
     val datSz = 32
   }
-  behavior of "AuctionController"
-  it should "do something" in {
-    test(new AuctionController(AuctionTestParams)) { c =>
-      println("Hello ChiselTest!")
-    }
-  }
-
-
-
-  behavior of "SearchTask"
-  it should "do something" in {
-    test(new SearchTask(AuctionTestParams)) { c =>
-      println("Hello ChiselTest!")
-    }
-  }
 
   behavior of "DataDistributor"
-  it should "do something" in {
+
+  it should "Initialize read/valid interfaces correctly" in {
     test(new DataDistributor(AuctionTestParams)) { c =>
-      println("Hello ChiselTest!")
+      c.peOut.map(_.valid.expect(false.B))
+      c.mem.valid.poke(false.B)
+
+      c.peOut.map(_.ready.poke(false.B))
+      c.mem.ready.expect(false.B)
     }
   }
 
-  behavior of "ProcessingElement"
-  it should "do something" in {
-    test(new ProcessingElement(AuctionTestParams)) { c =>
-      println("Hello ChiselTest!")
+  it should "Pass simple data through" in {
+    test(new DataDistributor(AuctionTestParams)) { c =>
+      c.peOut(0).ready.poke(true.B)
+      c.mem.valid.poke(true.B)
+      c.mem.bits.poke(69.U)
+
+      c.peOut(0).valid.expect(true.B)
+      c.peOut(0).bits.expect(69.U)
     }
   }
+
+  it should "Pass a stream of data out correctly" in {
+    test(new DataDistributor(AuctionTestParams)) { c =>
+      c.mem.initSource().setSourceClock(c.clock)
+      c.peOut.map(_.initSink.setSinkClock(c.clock))
+
+      fork {
+        c.mem.enqueueSeq(Seq.tabulate(100)(idx => idx.U))
+      }
+
+      for (i <- 0 until 100) {
+        println(s"i=$i cnt=${c.cnt.peek}")
+        c.peOut.zipWithIndex.map({ case (io, idx) =>
+          if (idx == i%4) {
+            io.expectDequeueNow((i.U))
+          }
+        })
+      }
+    }
+  }
+
+  it should "Pass a stream of data out correctly" in {
+    test(new DataDistributor(AuctionTestParams)) { c =>
+      c.mem.initSource().setSourceClock(c.clock)
+      c.peOut.map(_.initSink.setSinkClock(c.clock))
+
+      fork {
+        c.mem.enqueueSeq(Seq.tabulate(100)(idx => idx.U))
+      }
+
+      for (i <- 0 until 100) {
+        println(s"i=$i cnt=${c.cnt.peek}")
+        c.peOut.zipWithIndex.map({ case (io, idx) =>
+          if (idx == i%4) {
+            io.expectDequeueNow((i.U))
+          }
+        })
+      }
+    }
+  }
+
+
 }

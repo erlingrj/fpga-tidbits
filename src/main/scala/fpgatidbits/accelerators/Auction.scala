@@ -77,12 +77,14 @@ class DataDistributor(ap: AuctionParams) extends MultiIOModule {
   val mem = IO(Flipped(Decoupled(UInt(ap.datSz.W))))
   val peOut = IO(Vec(ap.nProcessingElements, Decoupled(UInt(ap.datSz.W))))
 
-  val regCount = RegInit(0.U)
+  val cnt  = IO(Output(UInt(log2Ceil(ap.nProcessingElements).W)))
 
+  val regCount = RegInit(0.U(log2Ceil(ap.nProcessingElements).W))
+  cnt := regCount
   // Initialize the output to 0s
   peOut.map({ (out: DecoupledIO[UInt]) =>
     out.valid := false.B
-    out.bits := 0.U
+    out.bits := DontCare
   })
 
   // Connect the memory stream to the right PE
@@ -94,6 +96,8 @@ class DataDistributor(ap: AuctionParams) extends MultiIOModule {
     }.otherwise {
       regCount := regCount + 1.U
     }
+  }.otherwise {
+    regCount := regCount
   }
 }
 
