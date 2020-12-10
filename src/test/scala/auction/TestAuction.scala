@@ -8,16 +8,12 @@ import fpgatidbits.Accelerators._
 
 
 class TestDataDistributor extends FlatSpec with ChiselScalatestTester with Matchers {
-
-
   object AuctionTestParams extends AuctionParams {
     val nProcessingElements = 4
     val datSz = 32
   }
 
-
   behavior of "DataDistributor"
-
   it should "Initialize read/valid interfaces correctly" in {
     test(new DataDistributor(AuctionTestParams)) { c =>
       c.peOut.map(_.valid.expect(false.B))
@@ -88,12 +84,10 @@ class TestDataDistributor extends FlatSpec with ChiselScalatestTester with Match
       }.fork {
         c.peOut(0).expectDequeueSeq(Seq.tabulate(25)(idx => (idx*4).U))
       }.fork {
-        c.peOut(1).expectDequeueSeq(Seq.tabulate(12)(idx => (1+(idx*4)).U))
+        c.peOut(1).expectDequeueSeq(Seq.tabulate(25)(idx => (1+(idx*4)).U))
       }.fork {
         for (i <- 0 until 25) {
-          if(i%2 == 0) {
-            c.clock.step(10)
-          }
+          if (i % 4 == 0) c.clock.step(100)
           c.peOut(2).expectDequeue((2+(i*4)).U)
         }
       }.fork {
