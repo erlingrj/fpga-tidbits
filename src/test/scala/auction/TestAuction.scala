@@ -59,23 +59,22 @@ class TestDataDistributor extends FlatSpec with ChiselScalatestTester with Match
     }
   }
 
-  it should "Pass a stream of data out correctly" in {
+  it should "Pass a stream of data out correctly 2" in {
     test(new DataDistributor(AuctionTestParams)) { c =>
       c.mem.initSource().setSourceClock(c.clock)
       c.peOut.map(_.initSink.setSinkClock(c.clock))
 
       fork {
         c.mem.enqueueSeq(Seq.tabulate(100)(idx => idx.U))
-      }
-
-      for (i <- 0 until 100) {
-        println(s"i=$i cnt=${c.cnt.peek}")
-        c.peOut.zipWithIndex.map({ case (io, idx) =>
-          if (idx == i%4) {
-            io.expectDequeueNow((i.U))
-          }
-        })
-      }
+      }.fork {
+        c.peOut(0).expectDequeueSeq(Seq.tabulate(25)(idx => (idx*4).U))
+      }.fork {
+        c.peOut(1).expectDequeueSeq(Seq.tabulate(25)(idx => (1+(idx*4)).U))
+      }.fork {
+        c.peOut(2).expectDequeueSeq(Seq.tabulate(25)(idx => (2+(idx*4)).U))
+      }.fork {
+        c.peOut(3).expectDequeueSeq(Seq.tabulate(25)(idx => (3+(idx*4)).U))
+      }.join()
     }
   }
 }
