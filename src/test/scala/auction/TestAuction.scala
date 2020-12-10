@@ -9,10 +9,12 @@ import fpgatidbits.Accelerators._
 
 class TestDataDistributor extends FlatSpec with ChiselScalatestTester with Matchers {
 
+
   object AuctionTestParams extends AuctionParams {
     val nProcessingElements = 4
     val datSz = 32
   }
+
 
   behavior of "DataDistributor"
 
@@ -76,6 +78,4 @@ class TestDataDistributor extends FlatSpec with ChiselScalatestTester with Match
       }
     }
   }
-
-
 }

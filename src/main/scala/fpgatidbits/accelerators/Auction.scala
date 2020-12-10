@@ -85,7 +85,7 @@ class DataDistributor(ap: AuctionParams) extends MultiIOModule {
   peOut.map({ (out: DecoupledIO[UInt]) =>
     out.valid := false.B
     out.bits := DontCare
-  })
+
 
   // Connect the memory stream to the right PE
   mem <> peOut(regCount)
@@ -96,8 +96,11 @@ class DataDistributor(ap: AuctionParams) extends MultiIOModule {
     }.otherwise {
       regCount := regCount + 1.U
     }
+<<<<<<< HEAD
   }.otherwise {
     regCount := regCount
+=======
+>>>>>>> 734678cce81f538fb56f1caf1176fab807c72b85
   }
 }
 
