@@ -77,4 +77,28 @@ class TestDataDistributor extends FlatSpec with ChiselScalatestTester with Match
       }.join()
     }
   }
+
+  it should "Pass a stream of data out correctly with stalls" in {
+    test(new DataDistributor(AuctionTestParams)) { c =>
+      c.mem.initSource().setSourceClock(c.clock)
+      c.peOut.map(_.initSink.setSinkClock(c.clock))
+
+      fork {
+        c.mem.enqueueSeq(Seq.tabulate(100)(idx => idx.U))
+      }.fork {
+        c.peOut(0).expectDequeueSeq(Seq.tabulate(25)(idx => (idx*4).U))
+      }.fork {
+        c.peOut(1).expectDequeueSeq(Seq.tabulate(12)(idx => (1+(idx*4)).U))
+      }.fork {
+        for (i <- 0 until 25) {
+          if(i%2 == 0) {
+            c.clock.step(10)
+          }
+          c.peOut(2).expectDequeue((2+(i*4)).U)
+        }
+      }.fork {
+        c.peOut(3).expectDequeueSeq(Seq.tabulate(25)(idx => (3+(idx*4)).U))
+      }.join()
+    }
+  }
 }
