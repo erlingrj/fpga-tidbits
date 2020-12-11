@@ -119,7 +119,7 @@ class ProcessingElement(ap: AuctionParams) extends MultiIOModule {
   // Drive signals to default
   io.rewardIn.ready := false.B
   io.benefitOut.valid := false.B
-  io.benefitOut.bits := 0.U
+  io.benefitOut.bits := DontCare
   io.priceIn.ready := false.B
 
 
@@ -172,10 +172,10 @@ class SearchTaskIO(ap: AuctionParams) extends Bundle {
 
 class SearchTask(ap: AuctionParams) extends MultiIOModule {
   val io = IO(new SearchTaskIO(ap))
-  val regCurrentBest = RegInit(0.U)
-  val regCurrentNextBest = RegInit(0.U)
-  val regCount = RegInit(0.U)
-  val regCurrentBestIdx = RegInit(0.U)
+  val regCurrentBest = RegInit(0.U(ap.datSz.W))
+  val regCurrentNextBest = RegInit(0.U(ap.datSz.W))
+  val regCount = RegInit(0.U(log2Ceil(ap.nProcessingElements).W))
+  val regCurrentBestIdx = RegInit(0.U(log2Ceil(ap.nProcessingElements).W))
 
   val sProcess :: sFinished :: Nil = Enum(2)
   val regState = RegInit(sProcess)
@@ -183,9 +183,7 @@ class SearchTask(ap: AuctionParams) extends MultiIOModule {
   // Drive interface signals to default
   io.driveDefaults
 
-
   switch (regState) {
-
     is (sProcess) {
       io.benefitIn.ready := true.B
       io.resultOut.valid := false.B
@@ -202,7 +200,6 @@ class SearchTask(ap: AuctionParams) extends MultiIOModule {
             regCurrentNextBest := io.benefitIn.bits
           }
         }
-
         // Increment count
         when(regCount === (ap.nProcessingElements - 1).U) {
           regCount := 0.U
@@ -220,6 +217,8 @@ class SearchTask(ap: AuctionParams) extends MultiIOModule {
 
       when (io.resultOut.fire) {
         regState := sProcess
+        regCurrentBest := 0.U
+        regCurrentNextBest := 0.U
       }
     }
   }
