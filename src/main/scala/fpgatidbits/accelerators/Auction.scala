@@ -189,14 +189,14 @@ class SearchTask(ap: AuctionParams) extends MultiIOModule {
       io.resultOut.valid := false.B
       io.resultOut.bits := DontCare
       when (io.benefitIn.fire) {
-        when(io.benefitIn.bits > regCurrentBest) {
+        when(io.benefitIn.bits > regCurrentBest && io.benefitIn.bits(ap.datSz-1) === false.B) {
           regCurrentBest := io.benefitIn.bits
           regCurrentNextBest := regCurrentBest
           regCurrentBestIdx := regCount
         }
         .otherwise
         {
-          when(io.benefitIn.bits > regCurrentNextBest) {
+          when(io.benefitIn.bits > regCurrentNextBest && io.benefitIn.bits(ap.datSz-1) === false.B) {
             regCurrentNextBest := io.benefitIn.bits
           }
         }
@@ -213,7 +213,14 @@ class SearchTask(ap: AuctionParams) extends MultiIOModule {
       io.benefitIn.ready := false.B
       io.resultOut.valid := true.B
       io.resultOut.bits.winner := regCurrentBestIdx
-      io.resultOut.bits.bid := regCurrentBest - regCurrentNextBest
+      // If we have a tie (and its valid != 0) we make a unit raise
+      // Not sure if this is desired? Well well
+
+      when (regCurrentBest === regCurrentNextBest && regCurrentBest > 0.U) {
+        io.resultOut.bits.bid := 1.U
+      }.otherwise{
+        io.resultOut.bits.bid := regCurrentBest - regCurrentNextBest
+      }
 
       when (io.resultOut.fire) {
         regState := sProcess
