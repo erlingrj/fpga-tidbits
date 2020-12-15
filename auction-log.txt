@@ -1,0 +1,6 @@
+# Auction method implementation log
+
+## 15 December
+- Finshed testing most single components.
+- Still havnt decided how to pass the result back to CPU
+- Should have bigger test with ChiselTest before doing Verilator

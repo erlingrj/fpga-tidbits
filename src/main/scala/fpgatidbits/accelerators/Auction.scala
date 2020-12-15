@@ -38,8 +38,47 @@ class Auction(p: PlatformWrapperParams, ap: AuctionParams) extends GenericAccele
     maxBeats = 1, chanID = 0, disableThrottle = true
   )
 
-
   val reader = Module(new StreamReader(rdP)).io
+
+  val auctionController = Module(new AuctionController(ap))
+  val dataDistributor = Module(new DataDistributor(ap))
+  val searchTask = Module(new SearchTask(ap))
+  val pe = for (i <- 0 until ap.nProcessingElements) yield {
+    Module(new ProcessingElement(ap))
+  }
+  val peDistributor = Module(new PEsToSearchTask(ap))
+
+  // Connect Streamreader to Datadistributor
+  dataDistributor.mem <> reader.out
+
+  // Connect DataDistributor to Processing Elements rewardIn port
+  dataDistributor.peOut.zipWithIndex.map( { case (port, idx) => port <> pe(idx).io.rewardIn })
+
+  // Connect AuctionController priceOut to PEs priceIn
+  auctionController.io.pricesOut.zipWithIndex.map( {case (port, idx) => port <> pe(idx).io.priceIn})
+
+  // Connect ProcessingElements to Search Task
+  pe.zipWithIndex.map({case (pe, idx) => pe.io.benefitOut <> peDistributor.peIn(idx)})
+
+  // Connect Search Results to the controller
+  searchTask.io.resultOut <> auctionController.io.searchResultIn
+
+  // Connect the auctionController to the streamReader
+  val ctrl = auctionController.io.streamReaderCtrlSignals
+  reader.start := ctrl.start
+  reader.baseAddr := ctrl.baseAddr
+  reader.byteCount := ctrl.byteCount
+  ctrl.finished := reader.finished
+  ctrl.active := reader.active
+
+ // Connect CSR to Auction controller
+  auctionController.io.nCols := io.nCols
+  auctionController.io.nRows := io.nRows
+  auctionController.io.start := io.start
+  io.finished := auctionController.io.finished
+
+
+
   val red = Module(new StreamReducer(32, 0, {_+_})).io
 
   reader.start := io.start
@@ -70,6 +109,27 @@ class Auction(p: PlatformWrapperParams, ap: AuctionParams) extends GenericAccele
     .elsewhen(io.start & !io.finished) {regCycleCount := regCycleCount + 1.U}
 }
 
+
+// This class connects all the PEs to the single Search Task
+// TODO: Support reset?
+class PEsToSearchTask(ap: AuctionParams) extends MultiIOModule {
+  val peIn = IO(Vec(ap.nProcessingElements, Flipped(Decoupled(UInt(ap.datSz.W)))))
+  val searchOut = IO(Decoupled(UInt(ap.datSz.W)))
+
+  // Drive defaults
+  peIn.map(_.ready := false.B)
+  val cnt  = RegInit(0.U(log2Ceil(ap.nProcessingElements).W))
+
+  searchOut <> peIn(cnt)
+
+  when(searchOut.fire) {
+    when(cnt === (ap.nProcessingElements - 1).U) {
+      cnt := 0.U
+    }.otherwise {
+      cnt := cnt + 1.U
+    }
+  }
+}
 
 
 // DataDistributor connects to the memory stream and distributes the values to the PEs
@@ -264,12 +324,12 @@ class AuctionControllerIO(ap: AuctionParams) extends Bundle {
     finished := false.B
     pricesOut.map({case (out) =>
       out.valid := false.B
-      out.bits := 0.U
+      out.bits := DontCare
     })
     searchResultIn.ready := false.B
     streamReaderCtrlSignals.start := false.B
-    streamReaderCtrlSignals.byteCount := 0.U
-    streamReaderCtrlSignals.baseAddr := 0.U
+    streamReaderCtrlSignals.byteCount := DontCare
+    streamReaderCtrlSignals.baseAddr := DontCare
   }
 }
 
@@ -282,7 +342,7 @@ class AuctionController(ap: AuctionParams) extends MultiIOModule {
   val qUnassigned = Module(new Queue(UInt(), ap.nProcessingElements)).io
   qUnassigned.deq.ready := false.B
   qUnassigned.enq.valid := false.B
-  qUnassigned.enq.bits := 0.U
+  qUnassigned.enq.bits := DontCare
 
   val regCurrentAgent= RegInit(0.U)
 
@@ -299,7 +359,7 @@ class AuctionController(ap: AuctionParams) extends MultiIOModule {
   val sSetup :: sIdle :: sReading :: sFinished :: Nil = Enum(4)
   val regState = RegInit(sSetup)
 
-  val cnt = RegInit(0.U)
+  val cnt = RegInit(0.U(log2Ceil(ap.nProcessingElements).W))
   switch (regState) {
 
     is (sSetup) {
@@ -332,8 +392,9 @@ class AuctionController(ap: AuctionParams) extends MultiIOModule {
           regState := sReading
         }.otherwise {
           // We have no unassigned agents. => We are finished
+          // At this point we must communicate the result back somehow
+
           io.finished := true.B
-          regState := sSetup
         }
 
       }

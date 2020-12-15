@@ -9,7 +9,115 @@ import chisel3.experimental.BundleLiterals._
 import fpgatidbits.Accelerators._
 
 
+class TestPEsToSearchTask extends FlatSpec with ChiselScalatestTester with Matchers {
 
+  object AuctionTestParams extends AuctionParams {
+    val nProcessingElements = 4
+    val datSz = 32
+  }
+  behavior of "PEsToSearchTask"
+
+  it should "Pass out correctly" in {
+    test(new PEsToSearchTask(AuctionTestParams)) {c =>
+      c.peIn.map(_.initSource.setSourceClock(c.clock))
+      c.searchOut.initSink.setSinkClock(c.clock)
+
+      fork {
+        c.peIn(0).enqueueSeq(Seq(1.U,2.U))
+      }.fork {
+        c.peIn(1).enqueueSeq(Seq(3.U,4.U))
+      }.fork {
+        c.peIn(2).enqueueSeq(Seq(5.U,6.U))
+      }.fork {
+        c.peIn(3).enqueueSeq(Seq(7.U,8.U))
+      }.fork {
+        c.searchOut.expectDequeueSeq(
+          Seq(1.U, 3.U, 5.U, 7.U, 2.U, 4.U, 6.U, 8.U)
+        )
+      }.join()
+    }
+  }
+}
+
+class TestAuctionController extends FlatSpec with ChiselScalatestTester with Matchers {
+
+  object AuctionTestParams extends AuctionParams {
+    val nProcessingElements = 4
+    val datSz = 32
+  }
+
+
+  behavior of "AuctionController"
+
+  it should "Initialize correctly" in {
+    test(new AuctionController(AuctionTestParams)) { c =>
+      c.io.finished.expect(false.B)
+      c.io.streamReaderCtrlSignals.start.expect(false.B)
+    }
+  }
+
+  it should "Request the correct memory addresses" in {
+    test(new AuctionController(AuctionTestParams)) { c =>
+      c.io.baseAddress.poke(0.U)
+      c.io.nCols.poke(4.U)
+      c.io.nRows.poke(4.U)
+
+      c.clock.step(4)
+      c.io.start.poke(true.B)
+      c.io.streamReaderCtrlSignals.start.expect(true.B)
+      c.io.streamReaderCtrlSignals.byteCount.expect(4.U)
+      c.io.streamReaderCtrlSignals.baseAddr.expect(0.U)
+
+    }
+  }
+
+
+  it should "Request and update correctly" in {
+    test(new AuctionController(AuctionTestParams)) { c =>
+      c.io.searchResultIn.initSource.setSourceClock(c.clock)
+      c.io.baseAddress.poke(0.U)
+      c.io.nCols.poke(4.U)
+      c.io.nRows.poke(4.U)
+
+      c.clock.step(4)
+      c.io.start.poke(true.B)
+      c.io.streamReaderCtrlSignals.start.expect(true.B)
+      c.io.streamReaderCtrlSignals.byteCount.expect(4.U)
+      c.io.streamReaderCtrlSignals.baseAddr.expect(0.U)
+
+
+      c.clock.step(1)
+      c.io.streamReaderCtrlSignals.finished.poke(true.B)
+      c.clock.step(1)
+      c.io.streamReaderCtrlSignals.finished.poke(false.B)
+      c.io.searchResultIn.ready.expect(true.B)
+
+      c.io.searchResultIn.enqueueNow(
+        chiselTypeOf(c.io.searchResultIn)
+          .bits.Lit(_.winner -> 2.U, _.bid -> 69.U)
+      )
+      c.io.start.poke(true.B)
+      c.io.streamReaderCtrlSignals.start.expect(true.B)
+      c.io.streamReaderCtrlSignals.byteCount.expect(4.U)
+      c.io.streamReaderCtrlSignals.baseAddr.expect(4.U)
+
+
+      c.clock.step(1)
+      c.io.streamReaderCtrlSignals.finished.poke(true.B)
+      c.clock.step(1)
+      c.io.streamReaderCtrlSignals.finished.poke(false.B)
+      c.io.searchResultIn.ready.expect(true.B)
+
+
+      c.io.searchResultIn.enqueueNow(
+        chiselTypeOf(c.io.searchResultIn)
+          .bits.Lit(_.winner -> 0.U, _.bid -> 169.U)
+      )
+      c.clock.step(1)
+    }
+  }
+
+}
 
 class TestSearchTask extends FlatSpec with ChiselScalatestTester with Matchers {
 
