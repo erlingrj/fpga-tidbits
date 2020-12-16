@@ -19,7 +19,7 @@ import scala.collection.mutable.LinkedHashMap
 // of dynamically instantiating and combining these to e.g command-line
 // parametrize creation: makeVerilogWrapper("wx690t", "my-accelerator")
 
-// parameters for the platform
+// para._meters for the platform
 trait PlatformWrapperParams {
   def numMemPorts: Int
   def platformName: String

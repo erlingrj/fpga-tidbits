@@ -5,8 +5,13 @@ import chisel3.util._
 import chisel3._
 import chisel3.util._
 
-class Q_srl(depthElems: Int, widthBits: Int) extends BlackBox(Map( "depth" -> depthElems, "width" -> widthBits))
+class Q_srl(depthElems: Int, widthBits: Int)
+  extends BlackBox(Map( "depth" -> depthElems, "width" -> widthBits))
+  with HasBlackBoxResource
 {
+
+
+  addResource("/verilog/Q_srl.v")
     val io = IO(new Bundle {
       val i_v = Input(Bool())
       val i_d = Input(UInt(widthBits.W))
@@ -17,26 +22,6 @@ class Q_srl(depthElems: Int, widthBits: Int) extends BlackBox(Map( "depth" -> de
       val count = Output(UInt(log2Ceil(depthElems+1).W))
       val clock = Input(Clock())
       val reset = Input(Reset())
-
-      /*
-      val iValid = Input(Bool()).suggestName("i_v")
-      val iData = Input(UInt(widthBits.W)).suggestName("i_d")
-      val iBackPressure = Output(Bool()).suggestName("i_b")
-      val oValid = Output(Bool()).suggestName("o_v")
-      val oData = Output(UInt(widthBits.W)).suggestName("o_d")
-      val oBackPressure = Input(Bool()).suggestName("o_b")
-      val count = Output(UInt(log2Ceil(depthElems+1).W)).suggestName("count")
-      val clock = Input(Clock())
-      val reset = Input(Reset())
-
-      iValid.suggestName("i_v")
-      iData.suggestName("i_d")
-      iBackPressure.suggestName("i_b")
-      oValid.suggestName("o_v")
-      oData.suggestName("o_d")
-      oBackPressure.suggestName("o_b")
-      count.suggestName("count")
-    */
 
     })
 

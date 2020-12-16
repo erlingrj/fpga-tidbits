@@ -11,6 +11,8 @@ import java.nio.file.{Files, Paths}
 import java.nio.ByteBuffer
 import java.io.FileOutputStream
 
+import chiseltest._
+
 import fpgatidbits.MainObj.{fileCopy, fileCopyBulk}
 import fpgatidbits.TidbitsMakeUtils._
 
@@ -186,6 +188,76 @@ extends PlatformWrapper(TesterWrapperParams, instFxn) {
     }
   }
 }
+
+// Erlingrj: Experimental, use implicits to get read/write to CSR
+//  and mem functionality into TesterWrapper
+object GenericAccelImplicits {
+  implicit class GenericAccelTesterDriver(c: TesterWrapper) {
+    val regFile = c.io.regFileIF
+    def nameToRegIdx(str: String): Int  = {
+      c.regFileMap(str)(0).toInt
+    }
+
+    def writeReg(regName: String, value: UInt) = {
+      val idx = nameToRegIdx(regName)
+      regFile.cmd.bits.regID.poke(idx.U)
+      regFile.cmd.bits.read.poke(false.B)
+      regFile.cmd.bits.write.poke(true.B)
+      regFile.cmd.bits.writeData.poke(value)
+      regFile.cmd.valid.poke(true.B)
+      c.clock.step()
+      regFile.cmd.valid.poke(false.B)
+      c.clock.step(5) // allow the command to propagate and take effect
+    }
+
+    def readReg(regName: String): UInt = {
+      val idx = nameToRegIdx(regName)
+      regFile.cmd.bits.regID.poke(idx.U)
+      regFile.cmd.bits.read.poke(true.B)
+      regFile.cmd.bits.write.poke(false.B)
+      regFile.cmd.valid.poke(true.B)
+      c.clock.step()
+      regFile.cmd.valid.poke(false.B)
+      regFile.readData.bits.peek
+    }
+
+    def expectReg(regName: String, value: UInt): Unit = {
+      val idx = nameToRegIdx(regName)
+      regFile.cmd.bits.regID.poke(idx.U)
+      regFile.cmd.bits.read.poke(true.B)
+      regFile.cmd.bits.write.poke(false.B)
+      regFile.cmd.valid.poke(true.B)
+      c.clock.step()
+      regFile.cmd.valid.poke(false.B)
+      regFile.readData.bits.expect(value)
+    }
+
+    def writeMem(addr: BigInt, value: UInt): Unit = {
+      c.io.memAddr.poke(addr.U)
+      c.io.memWriteData.poke(value)
+      c.io.memWriteEn.poke(true.B)
+      c.clock.step()
+      c.io.memWriteEn.poke(false.B)
+    }
+
+    def readMem(addr: BigInt): UInt = {
+      c.io.memAddr.poke(addr.U)
+      c.io.memWriteEn.poke(false.B)
+      c.clock.step()
+      c.io.memReadData
+    }
+
+    def expectMem(addr: BigInt, value: UInt) = {
+      c.io.memAddr.poke(addr.U)
+      c.io.memWriteEn.poke(false.B)
+      c.clock.step()
+      c.io.memReadData.expect(value)
+    }
+
+  }
+}
+
+
 
 
 class GenericAccelTester(c: TesterWrapper) extends PeekPokeTester(c) {

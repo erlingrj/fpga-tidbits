@@ -27,7 +27,6 @@ class Auction(p: PlatformWrapperParams, ap: AuctionParams) extends GenericAccele
     val nRows = Input(UInt(32.W))
     val nCols = Input(UInt(32.W))
     val byteCount = Input(UInt(32.W))
-    val sum = Output(UInt(32.W))
     val cycleCount = Output(UInt(32.W))
   })
   io.signature := makeDefaultSignature()
@@ -60,6 +59,9 @@ class Auction(p: PlatformWrapperParams, ap: AuctionParams) extends GenericAccele
   // Connect ProcessingElements to Search Task
   pe.zipWithIndex.map({case (pe, idx) => pe.io.benefitOut <> peDistributor.peIn(idx)})
 
+  // Connect peDistributor to searchTask
+  peDistributor.searchOut <> searchTask.io.benefitIn
+
   // Connect Search Results to the controller
   searchTask.io.resultOut <> auctionController.io.searchResultIn
 
@@ -70,38 +72,23 @@ class Auction(p: PlatformWrapperParams, ap: AuctionParams) extends GenericAccele
   reader.byteCount := ctrl.byteCount
   ctrl.finished := reader.finished
   ctrl.active := reader.active
+  ctrl.error := reader.error
 
  // Connect CSR to Auction controller
   auctionController.io.nCols := io.nCols
   auctionController.io.nRows := io.nRows
   auctionController.io.start := io.start
   io.finished := auctionController.io.finished
+  auctionController.io.baseAddress := io.baseAddr
 
-
-
-  val red = Module(new StreamReducer(32, 0, {_+_})).io
-
-  reader.start := io.start
-  reader.baseAddr := io.baseAddr
-  reader.byteCount := io.nRows * io.nCols
-
-
-  // Added by erlingrj because chisel3 complains they are not initialized
   //  when inspecting verilog output of chisel2 synthesis they are commented out of the
   //  module interface of StreamReader, how?
   reader.doInit := false.B
   reader.initCount := 0.U
 
-  red.start := io.start
-  red.byteCount := io.byteCount
-
-  io.sum := red.reduced
-  io.finished := red.finished
 
   reader.req <> io.memPort(0).memRdReq
   io.memPort(0).memRdRsp <> reader.rsp
-
-  reader.out <> red.streamIn
 
   val regCycleCount = RegInit(0.U(32.W))
   io.cycleCount := regCycleCount

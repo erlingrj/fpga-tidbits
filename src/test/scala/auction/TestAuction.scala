@@ -4,9 +4,36 @@ import org.scalatest._
 import chiseltest._
 import chisel3._
 import chisel3.experimental.BundleLiterals._
-
+import fpgatidbits.PlatformWrapper._
 
 import fpgatidbits.Accelerators._
+import fpgatidbits.PlatformWrapper.GenericAccelImplicits._
+
+
+class TestAuction extends FlatSpec with ChiselScalatestTester with Matchers {
+  object Ap extends AuctionParams {
+    val nProcessingElements = 4
+    val datSz = 32
+  }
+
+  behavior of "AuctionAlgo"
+
+  it should "Read/Write CSR" in {
+    test(new TesterWrapper({p => new Auction(p, Ap)}, "_dump")) { c =>
+
+      c.writeReg("nRows", 4.U)
+      c.expectReg("nRows", 4.U)
+    }
+  }
+  it should "read/write to mem" in {
+    test(new TesterWrapper({p => new Auction(p, Ap)}, "_dump")) { c =>
+      c.writeMem(8, 69.U)
+      c.expectMem(8, 69.U)
+    }
+  }
+}
+
+
 
 
 class TestPEsToSearchTask extends FlatSpec with ChiselScalatestTester with Matchers {
