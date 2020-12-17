@@ -4,3 +4,14 @@
 - Finshed testing most single components.
 - Still havnt decided how to pass the result back to CPU
 - Should have bigger test with ChiselTest before doing Verilator
+
+## 17 December
+- system-level most basic test of Auction works with Treadle simulator (this is superior to using Verilator)
+- Quite inefficient memory system interface (it reads each column one at the time)
+- Still havent landed on a few things:
+1. How to present the result (write to a specified memory address)
+2. How to deal with variable sized input problems. My current implementation assumes that we have PEs == Agents == Objects.
+we must support a variable number of agents and objects WITHOUT LOSING performance.
+Also we must consider that we wanna implement Murty later also.
+3. More efficient memory interface: If we reduce precision to 8bit, 4bit etc we wanna fully utilize the 64bit wide interface.
+Also. Now we stream out each element one at the time. So we want something else than StreamReader?
