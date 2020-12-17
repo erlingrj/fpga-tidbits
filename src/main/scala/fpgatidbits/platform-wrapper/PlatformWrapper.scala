@@ -10,7 +10,6 @@ package fpgatidbits.PlatformWrapper
 import chisel3._
 import chisel3.util._
 import chisel3.experimental._
-import fpgatidbits.PlatformParams
 import fpgatidbits.dma._
 import fpgatidbits.regfile._
 
@@ -53,10 +52,6 @@ trait PlatformWrapperParams {
 abstract class PlatformWrapper
 (val p: PlatformWrapperParams,
 val instFxn: PlatformWrapperParams => GenericAccelerator)  extends MultiIOModule {
-
-  // This is the global platform params that all
-  //  modules can access by adding them as implicit parameters
-  implicit val platformParams = PlatformParams()
 
   type RegFileMap = LinkedHashMap[String, Array[Int]]
 

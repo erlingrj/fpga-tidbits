@@ -4,7 +4,6 @@ package fpgatidbits.ocm
 import chisel3.util._
 import chisel3._
 import chisel3.util._
-import fpgatidbits.PlatformParams
 
 
 class Q_srl(depthElems: Int, widthBits: Int)

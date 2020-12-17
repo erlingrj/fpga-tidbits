@@ -183,10 +183,6 @@ object MainObj {
   type PlatformMap = Map[String, PlatformInstFxn]
 
 
-  val platformParams: PlatformParams = PlatformParams()
-
-
-
   val accelMap: AccelMap  = Map(
     "TestRegOps" -> {p => new TestRegOps(p)},
     "TestSum" -> {p => new TestSum(p)},
