@@ -18,8 +18,13 @@ class AuctionRunTimeParams extends Bundle {
 }
 
 // read and sum a contiguous stream of 32-bit uints from main memory
-class Auction(p: PlatformWrapperParams, ap: AuctionParams) extends GenericAccelerator(p) {
+class Auction(p: PlatformWrapperParams) extends GenericAccelerator(p) {
   val numMemPorts = 1
+
+  object ap extends AuctionParams {
+    val nProcessingElements = 4
+    val datSz = 16
+  }
   val io = IO(new GenericAcceleratorIF(numMemPorts, p) {
     val start = Input(Bool())
     val finished = Output(Bool())
@@ -33,9 +38,10 @@ class Auction(p: PlatformWrapperParams, ap: AuctionParams) extends GenericAccele
   plugMemWritePort(0)
 
   val rdP = new StreamReaderParams(
-    streamWidth = 32, fifoElems = 8, mem = p.toMemReqParams(),
-    maxBeats = 1, chanID = 0, disableThrottle = true
+    streamWidth = 16, fifoElems = 8, mem = p.toMemReqParams(),
+    maxBeats = 1, chanID = 0, disableThrottle = true, useChiselQueue = true
   )
+
 
   val reader = Module(new StreamReader(rdP)).io
 
@@ -325,7 +331,16 @@ class AuctionController(ap: AuctionParams) extends MultiIOModule {
   val io = IO(new AuctionControllerIO(ap))
   io.driveDefaults
 
-  val regAssignments = RegInit(VecInit(Seq.fill(ap.nProcessingElements){ap.nProcessingElements.U}))
+  val constUnassigned = ap.nProcessingElements
+  val constAssSz = log2Ceil(ap.nProcessingElements)
+  // This function looks up object at index <obj> and checks if the MSb is set
+  def objectIsAssigned(obj: UInt): Bool = {
+    (regAssignments(obj) >> constAssSz).asUInt === 0.U
+  }
+
+  // Initialize the agent->object assignments. Unassigned == high bit set
+  val regAssignments = RegInit(VecInit(Seq.fill(ap.nProcessingElements){
+    0.U((log2Ceil(ap.nProcessingElements) + 1).W)}))
   val qUnassigned = Module(new Queue(UInt(), ap.nProcessingElements)).io
   qUnassigned.deq.ready := false.B
   qUnassigned.enq.valid := false.B
@@ -353,6 +368,9 @@ class AuctionController(ap: AuctionParams) extends MultiIOModule {
       // Setup the unassigned queue
       qUnassigned.enq.valid := true.B
       qUnassigned.enq.bits := cnt
+      // Set the objects to unassigned
+      regAssignments(cnt) := constUnassigned.U
+
       when (cnt === (ap.nProcessingElements - 1).U) {
         cnt := 0.U
         regState := sIdle
@@ -373,8 +391,8 @@ class AuctionController(ap: AuctionParams) extends MultiIOModule {
 
           // Start the streamReader
           io.streamReaderCtrlSignals.start := true.B
-          io.streamReaderCtrlSignals.baseAddr := io.baseAddress + unassigned*ap.nProcessingElements.U
-          io.streamReaderCtrlSignals.byteCount := io.nCols
+          io.streamReaderCtrlSignals.baseAddr := io.baseAddress + unassigned*io.nCols*(ap.datSz/8).U
+          io.streamReaderCtrlSignals.byteCount := io.nCols * (ap.datSz/8).U
 
           regState := sReading
         }.otherwise {
@@ -388,6 +406,8 @@ class AuctionController(ap: AuctionParams) extends MultiIOModule {
 
     }
     is (sReading) {
+      // Keep start signal high so the StreamReader continues counting
+      io.streamReaderCtrlSignals.start := true.B
       when (io.streamReaderCtrlSignals.finished) {
         regState := sFinished
       }
@@ -399,11 +419,17 @@ class AuctionController(ap: AuctionParams) extends MultiIOModule {
         // Update unassigned and assigned and prices
         val obj = io.searchResultIn.bits.winner
         val bid = io.searchResultIn.bits.bid
-        when (bid.asSInt >= 0.S) {
-          qUnassigned.enq.bits := regAssignments(obj)
-          qUnassigned.enq.valid := true.B
-          assert(qUnassigned.enq.ready)
 
+        // Check if we have a valid bid (e.g. its positive)
+        when (bid.asSInt > 0.S) {
+          // First we must remove the agent that was previous assigned
+          //  and add it to the tail of the unassigned queue
+          when(objectIsAssigned(obj)) {
+            qUnassigned.enq.bits := regAssignments(obj)
+            qUnassigned.enq.valid := true.B
+            assert(qUnassigned.enq.ready)
+          }
+          // Update the assignement and prices
           regAssignments(obj) := regCurrentAgent
           regPrices(obj) := bid
         }

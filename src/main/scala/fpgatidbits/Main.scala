@@ -3,6 +3,7 @@ package fpgatidbits
 import chisel3._
 import chisel3.util._
 import chisel3.iotesters._
+import fpgatidbits.Accelerators.Auction
 import fpgatidbits.Testbenches._
 //import fpgatidbits.ocm._
 //import fpgatidbits.streams._
@@ -14,6 +15,7 @@ import fpgatidbits.PlatformWrapper._
 import java.io.{File,FileInputStream,FileOutputStream}
 import sys.process._
 import java.nio.file.Paths
+
 
 
 // erlingrj: Seems as if you need this testbench to instantiate the dut
@@ -181,6 +183,10 @@ object MainObj {
   type PlatformMap = Map[String, PlatformInstFxn]
 
 
+  val platformParams: PlatformParams = PlatformParams()
+
+
+
   val accelMap: AccelMap  = Map(
     "TestRegOps" -> {p => new TestRegOps(p)},
     "TestSum" -> {p => new TestSum(p)},
@@ -192,6 +198,7 @@ object MainObj {
     "TestBRAMMasked" -> {p => new TestBRAMMasked(p)},
     //"TestMemLatency" -> {p => new TestMemLatency(p)},
     //"TestGather" -> {p => new TestGather(p)}
+    "Auction" -> {p => new Auction(p)}
   )
 
   val platformMap = TidbitsMakeUtils.platformMap
@@ -233,7 +240,7 @@ object MainObj {
 
 
     val accInst = accelMap(accelName)
-    val platformInst = {f => new VerilatedTesterWrapper(f, targetDir)}
+    val platformInst = { f => new VerilatedTesterWrapper(f, targetDir)}
     val chiselArgs = Array("--target-dir", targetDir)
 
     // generate verilog for the accelerator and create the regfile driver

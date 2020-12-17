@@ -4,6 +4,8 @@ package fpgatidbits.ocm
 import chisel3.util._
 import chisel3._
 import chisel3.util._
+import fpgatidbits.PlatformParams
+
 
 class Q_srl(depthElems: Int, widthBits: Int)
   extends BlackBox(Map( "depth" -> depthElems, "width" -> widthBits))
@@ -52,7 +54,9 @@ class Q_srl(depthElems: Int, widthBits: Int)
 
 class SRLQueue[T <: Data](gen: T, val entries: Int) extends Module {
   val io = IO(new QueueIO(gen, entries))
+
   val srlQ = Module(new Q_srl(entries, gen.getWidth)).io
+
 
   io.count := srlQ.count
   srlQ.i_v := io.enq.valid
@@ -66,6 +70,7 @@ class SRLQueue[T <: Data](gen: T, val entries: Int) extends Module {
   // invert signals while connecting
   srlQ.o_b := !io.deq.ready
   io.enq.ready := !srlQ.i_b
+
 }
 
 

@@ -10,9 +10,10 @@ package fpgatidbits.PlatformWrapper
 import chisel3._
 import chisel3.util._
 import chisel3.experimental._
-
+import fpgatidbits.PlatformParams
 import fpgatidbits.dma._
 import fpgatidbits.regfile._
+
 import scala.collection.mutable.LinkedHashMap
 
 // TODO need cleaner separation of accel and platform parameters, also a way
@@ -52,6 +53,11 @@ trait PlatformWrapperParams {
 abstract class PlatformWrapper
 (val p: PlatformWrapperParams,
 val instFxn: PlatformWrapperParams => GenericAccelerator)  extends MultiIOModule {
+
+  // This is the global platform params that all
+  //  modules can access by adding them as implicit parameters
+  implicit val platformParams = PlatformParams()
+
   type RegFileMap = LinkedHashMap[String, Array[Int]]
 
   // a list of files that will be needed for compiling drivers for platform
@@ -62,6 +68,8 @@ val instFxn: PlatformWrapperParams => GenericAccelerator)  extends MultiIOModule
 
   // Rename clock -> clk
   clock.suggestName("clk")
+
+
 
   // instantiate the accelerator
   //val regWrapperReset = Reg(init = false.B, clock = Driver.implicitClock)

@@ -68,6 +68,10 @@ extends PlatformWrapper(TesterWrapperParams, instFxn) {
   val mem = SyncReadMem(memWords, UInt(p.memDataBits.W))
 
   // testbench memory access
+  // Typically 64 bits data words in memory. The address is shifted log2(nBytes)
+  //  Which is normally 3 bits. This must be to "simulate" byte-addressing?
+  //  So memAddr is byte-addresses? So 0->8 means accessing first word. And then do the filtering in the StreamReader?
+
   def addrToWord(x: UInt) = {x >> (log2Ceil(p.memDataBits/8))}
   val memWord = addrToWord(io.memAddr)
   io.memReadData := mem.read(memWord)
@@ -253,6 +257,15 @@ object GenericAccelImplicits {
       c.clock.step()
       c.io.memReadData.expect(value)
     }
+
+    def arrayToMem(startAddr: BigInt, arr: Seq[UInt]): Unit = {
+      var addr = startAddr
+      for (value <- arr) {
+        writeMem(addr, value)
+        addr = addr + 8 //TODO: Support variable memory data width
+      }
+    }
+
 
   }
 }

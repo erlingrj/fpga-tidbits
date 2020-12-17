@@ -14,7 +14,8 @@ class StreamReaderParams(
   val disableThrottle: Boolean = false,
   val readOrderCache: Boolean = false,
   val readOrderTxns: Int = 4,
-  val streamName: String = "stream"
+  val streamName: String = "stream",
+  val useChiselQueue: Boolean = false
 )
 
 class StreamReaderIF(private val w: Int, private val p: MemReqParams) extends Bundle {
@@ -54,8 +55,16 @@ class StreamReader(val p: StreamReaderParams) extends Module {
 
   // read request generator
   val rg = Module(new ReadReqGen(p.mem, p.chanID, p.maxBeats)).io
-  // FIFO to store read data
-  val fifo = Module(new FPGAQueue(StreamElem, p.fifoElems)).io
+  // FIFO to store read data.
+  // erlingrj: I added a temporary parameter so I can generate a normal Chisel Queue
+  //  this should be solved someplace else in the future
+  // TODO: Refactor option between using Chisel Queue and FPGAQueue
+  val fifo =
+    if (p.useChiselQueue) {
+      Module(new Queue(StreamElem, p.fifoElems)).io
+    } else {
+      Module(new FPGAQueue(StreamElem, p.fifoElems)).io
+    }
   val streamBytes = (p.streamWidth/8).U
   val memWidthBytes = p.mem.dataWidth/8
 
