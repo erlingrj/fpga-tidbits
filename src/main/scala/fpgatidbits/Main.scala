@@ -3,7 +3,6 @@ package fpgatidbits
 import chisel3._
 import chisel3.util._
 import chisel3.iotesters._
-import fpgatidbits.Accelerators.Auction
 import fpgatidbits.Testbenches._
 //import fpgatidbits.ocm._
 //import fpgatidbits.streams._
@@ -194,7 +193,6 @@ object MainObj {
     "TestBRAMMasked" -> {p => new TestBRAMMasked(p)},
     //"TestMemLatency" -> {p => new TestMemLatency(p)},
     //"TestGather" -> {p => new TestGather(p)}
-    "Auction" -> {p => new Auction(p)}
   )
 
   val platformMap = TidbitsMakeUtils.platformMap

@@ -47,7 +47,7 @@ class TestAuction extends FlatSpec with ChiselScalatestTester with Matchers {
       }
     }
 
-  /*
+
   it should "read/write multiple matrix to memory" in {
     test(new TesterWrapper({p => new Auction(p)}, "_dump")) { c =>
 
@@ -70,19 +70,19 @@ class TestAuction extends FlatSpec with ChiselScalatestTester with Matchers {
 
 
   it should "Read/Write CSR" in {
-    test(new TesterWrapper({p => new Auction(p, Ap)}, "_dump")) { c =>
+    test(new TesterWrapper({p => new Auction(p)}, "_dump")) { c =>
 
       c.writeReg("nRows", 4.U)
       c.expectReg("nRows", 4.U)
     }
   }
   it should "read/write to mem" in {
-    test(new TesterWrapper({p => new Auction(p, Ap)}, "_dump")) { c =>
+    test(new TesterWrapper({p => new Auction(p)}, "_dump")) { c =>
       c.writeMem(8, 69.U)
       c.expectMem(8, 69.U)
     }
   }
-*/
+
 
 }
 
@@ -145,7 +145,7 @@ class TestAuctionController extends FlatSpec with ChiselScalatestTester with Mat
       c.clock.step(4)
       c.io.start.poke(true.B)
       c.io.streamReaderCtrlSignals.start.expect(true.B)
-      c.io.streamReaderCtrlSignals.byteCount.expect(4.U)
+      c.io.streamReaderCtrlSignals.byteCount.expect(16.U)
       c.io.streamReaderCtrlSignals.baseAddr.expect(0.U)
 
     }
@@ -162,7 +162,7 @@ class TestAuctionController extends FlatSpec with ChiselScalatestTester with Mat
       c.clock.step(4)
       c.io.start.poke(true.B)
       c.io.streamReaderCtrlSignals.start.expect(true.B)
-      c.io.streamReaderCtrlSignals.byteCount.expect(4.U)
+      c.io.streamReaderCtrlSignals.byteCount.expect(16.U)
       c.io.streamReaderCtrlSignals.baseAddr.expect(0.U)
 
 
@@ -178,8 +178,8 @@ class TestAuctionController extends FlatSpec with ChiselScalatestTester with Mat
       )
       c.io.start.poke(true.B)
       c.io.streamReaderCtrlSignals.start.expect(true.B)
-      c.io.streamReaderCtrlSignals.byteCount.expect(4.U)
-      c.io.streamReaderCtrlSignals.baseAddr.expect(4.U)
+      c.io.streamReaderCtrlSignals.byteCount.expect(16.U)
+      c.io.streamReaderCtrlSignals.baseAddr.expect(16.U)
 
 
       c.clock.step(1)
