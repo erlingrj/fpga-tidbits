@@ -3,7 +3,7 @@ package fpgatidbits.PlatformWrapper
 
 import chisel3._
 import chisel3.util._
-import chisel3.iotesters._
+//import chisel3.iotesters._
 import fpgatidbits.axi._
 import fpgatidbits.dma._
 import fpgatidbits.regfile._

@@ -2,7 +2,6 @@ package fpgatidbits
 
 import chisel3._
 import chisel3.util._
-import chisel3.iotesters._
 import fpgatidbits.Testbenches._
 //import fpgatidbits.ocm._
 //import fpgatidbits.streams._
@@ -18,7 +17,7 @@ import java.nio.file.Paths
 
 // erlingrj: Seems as if you need this testbench to instantiate the dut
 // so we can emit verilator c++ code that simulates the dut
-class TesterEmitVerilator[T <: MultiIOModule](dut: T) extends iotesters.PeekPokeTester(dut) {}
+class TesterEmitVerilator[T <: MultiIOModule](dut: T) {}
 
 
 object TidbitsMakeUtils {
