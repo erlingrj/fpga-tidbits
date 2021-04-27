@@ -2,14 +2,14 @@
 
 ThisBuild / scalaVersion     := "2.12.13"
 ThisBuild / version          := "0.1.0"
-ThisBuild / organization     := "%ORGANIZATION%"
+ThisBuild / organization     := "NTNU"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "%NAME%",
+    name := "fpgatidbits",
     libraryDependencies ++= Seq(
       "edu.berkeley.cs" %% "chisel3" % "3.4.3",
-      "edu.berkeley.cs" %% "chiseltest" % "0.3.3" % "test"
+      "edu.berkeley.cs" %% "chiseltest" % "0.3.3"
     ),
     scalacOptions ++= Seq(
       "-Xsource:2.11",
