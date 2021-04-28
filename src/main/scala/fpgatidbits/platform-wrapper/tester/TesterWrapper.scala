@@ -45,6 +45,18 @@ class TesterMemoryWrapper(p: PlatformWrapperParams, val numMemPorts: Int) extend
     val memPort = Vec(numMemPorts, new GenericMemorySlavePort(mrp))
   })
 
+  //  accio.memPort.map { m =>
+  //      m.memWrDat.ready := false.B
+  //      m.memWrReq.ready := false.B
+  //      m.memWrRsp.valid := false.B
+  //      m.memWrRsp.bits := DontCare
+  //      m.memRdReq.ready := false.B
+  //      m.memRdRsp.valid := false.B
+  //      m.memRdRsp.bits := DontCare
+  //    }
+  //
+  //
+  //
   val verio = IO(new Bundle {
     val memAddr = Input(UInt(p.memAddrBits.W))
     val memWriteEn = Input(Bool())
@@ -83,15 +95,16 @@ class TesterMemoryWrapper(p: PlatformWrapperParams, val numMemPorts: Int) extend
     val sWaitRd :: sRead :: Nil = Enum(2)
     val regStateRead = RegInit(sWaitRd)
     val s1_regReadRequest = Reg(Valid(new GenericMemoryRequest(mrp)))
-    val s2_regReadRequest = Reg(Valid(new GenericMemoryResponse(mrp)))
+    val s2_regReadRequest = Reg(Valid(new GenericMemoryRequest(mrp)))
     val s3_regMemRead = Reg(Valid(new GenericMemoryResponse(mrp)))
 
+    val s1_wireMemAddr = WireInit(0.U(p.memDataBits.W))
     val regTransactionsLeft = RegInit(0.U(32.W))
 
     val accmp = accio.memPort(i)
     val accRdReq = addLatency(15, accmp.memRdReq)
     val accRdRsp = accmp.memRdRsp
-    val memRead = WireInit(mem(addrToWord(s1_regReadRequest.bits.addr)))
+    val memRead = WireInit(mem(addrToWord(s1_wireMemAddr)))
 
     accRdRsp.bits := s3_regMemRead.bits
     accRdRsp.valid := s3_regMemRead.valid
@@ -125,17 +138,23 @@ class TesterMemoryWrapper(p: PlatformWrapperParams, val numMemPorts: Int) extend
               s1_regReadRequest.valid := false.B
             }
           }
+          // Mem read
+          s1_wireMemAddr := s1_regReadRequest.bits.addr
 
           // s2
-          s2_regReadRequest.valid := s1_regReadRequest.valid
-          s2_regReadRequest.bits := 0.U.asTypeOf(GenericMemoryResponse(mrp))
-          s2_regReadRequest.bits.channelID := s1_regReadRequest.bits.channelID
-          s2_regReadRequest.bits.isLast := s1_regReadRequest.bits.numBytes === memUnitBytes
+          s2_regReadRequest := s1_regReadRequest
 
           // s3
           s3_regMemRead.valid := s2_regReadRequest.valid
-          s3_regMemRead.bits := s2_regReadRequest.bits
+          s3_regMemRead.bits.metaData := s2_regReadRequest.bits.metaData
+          s3_regMemRead.bits.channelID := s2_regReadRequest.bits.channelID
+          s3_regMemRead.bits.isWrite := false.B
+          s3_regMemRead.bits.isLast := s2_regReadRequest.bits.numBytes === memUnitBytes
           s3_regMemRead.bits.readData := memRead
+
+        }.otherwise {
+          // If stall
+          s1_wireMemAddr := s2_regReadRequest.bits.addr
         }
       }
     }
@@ -217,13 +236,20 @@ class TesterWrapper(instFxn: PlatformWrapperParams => GenericAccelerator, target
   // expose regfile interface for testbench
   io.regFileIF <> regFile.extIF
 
-  val memory = new TesterMemoryWrapper(p, accel.p.numMemPorts)
+  val memory = Module(new TesterMemoryWrapper(p, accel.numMemPorts))
   memory.verio.memAddr := io.memAddr
   memory.verio.memWriteEn := io.memWriteEn
   memory.verio.memWriteData := io.memWriteData
-  memory.verio.memReadData := io.memReadData
+  io.memReadData := memory.verio.memReadData
 
-  memory.accio.memPort zip accio.memPort map { case (l,r) => l <> r }
+
+  for (i <- 0 until accel.numMemPorts) {
+    accio.memPort(i).memRdRsp <> memory.accio.memPort(i).memRdRsp
+    accio.memPort(i).memRdReq <> memory.accio.memPort(i).memRdReq
+    accio.memPort(i).memWrDat <> memory.accio.memPort(i).memWrDat
+    accio.memPort(i).memWrReq <> memory.accio.memPort(i).memWrReq
+    accio.memPort(i).memWrRsp <> memory.accio.memPort(i).memWrRsp
+  }
 
 }
 

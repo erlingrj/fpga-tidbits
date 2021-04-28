@@ -133,7 +133,7 @@ class TestTesterMemoryWrapper extends FlatSpec with ChiselScalatestTester with M
       c.accio.memPort(0).memRdRsp.expectDequeueSeq(dsplit._1.zipWithIndex.map(d => {
         chiselTypeOf(c.accio.memPort(0).memRdRsp).bits.Lit(
           _.readData -> d._1.U,
-          _.isLast ->  (d._2 == data.size-1).B,
+          _.isLast ->  false.B,
           _.channelID -> 0.U,
           _.isWrite -> false.B,
           _.metaData -> 0.U
@@ -144,7 +144,7 @@ class TestTesterMemoryWrapper extends FlatSpec with ChiselScalatestTester with M
       c.accio.memPort(0).memRdRsp.expectDequeueSeq(dsplit._2.zipWithIndex.map(d => {
         chiselTypeOf(c.accio.memPort(0).memRdRsp).bits.Lit(
           _.readData -> d._1.U,
-          _.isLast ->  (d._2 == data.size-1).B,
+          _.isLast ->  (d._2 == 3).B,
           _.channelID -> 0.U,
           _.isWrite -> false.B,
           _.metaData -> 0.U
