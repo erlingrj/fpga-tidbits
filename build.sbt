@@ -4,7 +4,7 @@ ThisBuild / scalaVersion     := "2.12.13"
 ThisBuild / version          := "0.1.0"
 ThisBuild / organization     := "NTNU"
 
-lazy val root = (project in file("."))
+lazy val fpgatidbits = (project in file("."))
   .settings(
     name := "fpgatidbits",
     libraryDependencies ++= Seq(
